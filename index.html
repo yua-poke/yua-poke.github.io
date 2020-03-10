@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>素材のふち消し</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <script
+    src="https://code.jquery.com/jquery-2.2.4.min.js"
+    integrity="sha256-BbhdlvQf/xTY9gja0Dq3HiwQF8LaCRTXxZKRutelT44="
+    crossorigin="anonymous"></script>
+</head>
+<body>
+  <div>
+    <input type="file" id="file" accept="image/png">
+  </div>
+  <div>
+    <input id="start" type="button" value="読み込む">
+  </div>
+  <div id="result">
+    <canvas id="cvs"></canvas>
+    <input id="dl" type="button" value="ダウンロード">
+    <input id="restart" type="button" value="もっと削る">
+  </div>
+  <div id="lock" style="z-index:999;position:absolute;top:0px;left:0px;right:0px;bottom:0px;background-color:pink;opacity:0.3;text-align:center;font-size:xx-large;color:gray;">読み込み中...</div>
+  <script>
+    $(function(){
+
+      $("#result").hide();
+      unlock();
+
+      function lock(){
+        $("#lock").show();
+      }
+      function unlock(){
+        $("#lock").hide();
+      }
+
+      $("#start").on("click", function(){
+
+        lock();
+        $("#result").hide();
+
+        if ($("#file").val() === "") {
+          alert("ファイル選んでね");
+          unlock();
+          return;
+        }
+
+        var file = $("#file").prop("files")[0];
+        var canvas = $("#cvs");
+        var ctx = canvas[0].getContext('2d');
+
+        var image = new Image();
+        var fr = new FileReader();
+
+        fr.onload = function(evt) {
+          image.onload = function() {
+            var height = image.naturalHeight;
+            var width = image.naturalWidth;
+            canvas.attr('width', width);
+            canvas.attr('height', height);
+            ctx.drawImage(image, 0, 0, width, height);
+
+            trimImage(ctx);
+            // 処理おわり
+            $("#result").show();
+            unlock();
+          }
+          image.src = evt.target.result;
+        }
+
+        fr.readAsDataURL(file);
+      });
+
+      $("#restart").on("click", function(){
+        lock();
+        $("#result").hide();
+        var canvas = $("#cvs");
+        var ctx = canvas[0].getContext('2d');
+        trimImage(ctx);
+        $("#result").show();
+        unlock();
+      });
+
+      $("#dl").on("click", function(){
+        var png = $("#cvs").get(0).toDataURL();
+        $("#resultLink").attr("href", png);
+        $("#resultLink").attr("download", "matome.png");
+        $("#resultArea").show();
+      });
+
+      function trimImage(ctx){
+        var width = ctx.canvas.width;
+        var height = ctx.canvas.height;
+        var imagedata = ctx.getImageData(0, 0, width, height);
+        var aflgs = [];
+        // 透明度チェック
+        for (var i = 0; i < width * height; i++) {
+          if (imagedata.data[i*4+3] === 0){
+            aflgs.push(true);
+          }else{
+            aflgs.push(false);
+          }
+        }
+
+        // 消す場所チェック
+        var delflgs = new Array(aflgs.length).fill(false);
+        for (var y = 0; y < height; y++){
+          for (var x = 0; x < width; x++){
+            if (aflgs[y * width + x] === true){
+              if (y !== 0){
+                delflgs[(y - 1) * width + x] = true;
+              }
+              if (x !== 0){
+                delflgs[y * width + (x - 1)] = true;
+              }
+              if (y !== (height - 1)){
+                delflgs[(y + 1) * width + x] = true;
+              }
+              if (x !== (width - 1)){
+                delflgs[y * width + (x + 1)] = true;
+              }
+              if (y !== 0 && x !== 0){
+                delflgs[(y - 1) * width + (x - 1)] = true;
+              }
+              if (y !== (height - 1) && x !== 0){
+                delflgs[(y + 1) * width + (x - 1)] = true;
+              }
+              if (y !== 0 && x !== (width - 1)){
+                delflgs[(y - 1) * width + (x + 1)] = true;
+              }
+              if (y !== (height - 1) && x !== (width - 1)){
+                delflgs[(y + 1) * width + (x + 1)] = true;
+              }
+            }
+          }
+        }
+
+        // 消しゴム
+        for (var y = 0; y < height; y++){
+          for (var x = 0; x < width; x++){
+            if (aflgs[y * width + x] === false && delflgs[y * width + x] === true){
+              imagedata.data[(y * width + x) * 4 + 0] = 0;
+              imagedata.data[(y * width + x) * 4 + 1] = 0;
+              imagedata.data[(y * width + x) * 4 + 2] = 0;
+              imagedata.data[(y * width + x) * 4 + 3] = 0;
+            }
+          }
+        }
+        ctx.clearRect(0, 0, width, height);
+
+        ctx.putImageData(imagedata, 0, 0);
+      }
+    });
+  </script>
+</body>
+</html>
