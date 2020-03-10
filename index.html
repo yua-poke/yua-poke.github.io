@@ -18,6 +18,7 @@
   <div id="result">
     <canvas id="cvs"></canvas>
     <input id="dl" type="button" value="ダウンロード">
+    <a href="" id="dllink" download="sozai.png"></a>
     <input id="restart" type="button" value="もっと削る">
   </div>
   <div id="lock" style="z-index:999;position:absolute;top:0px;left:0px;right:0px;bottom:0px;background-color:pink;opacity:0.3;text-align:center;font-size:xx-large;color:gray;">読み込み中...</div>
@@ -82,10 +83,14 @@
       });
 
       $("#dl").on("click", function(){
-        var png = $("#cvs").get(0).toDataURL();
-        $("#resultLink").attr("href", png);
-        $("#resultLink").attr("download", "matome.png");
-        $("#resultArea").show();
+        var canvas = $("#cvs")[0];
+        if (canvas.msToBlob) {
+          var blob = canvas.msToBlob();
+          window.navigator.msSaveBlob(blob, 'sozai.png');
+        }else{
+          $("#dllink").attr("href", canvas.toDataURL());
+          $("#dllink")[0].click();
+        }
       });
 
       function trimImage(ctx){
