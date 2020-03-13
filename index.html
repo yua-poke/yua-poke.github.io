@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>素材のふち消し</title>
+  <title>素材加工</title>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
   <script
     src="https://code.jquery.com/jquery-2.2.4.min.js"
@@ -10,21 +10,30 @@
 </head>
 <body>
   <div>
+    png素材を読み込んでボタンを押したらシールになるよ
+  </div>
+  <div>
     <input type="file" id="file" accept="image/png">
   </div>
   <div>
-    <input id="start" type="button" value="読み込む">
+    <input id="addFrame" type="button" value="枠を付ける(シール化)">
+<!--    <input id="start" type="button" value="フチをぼかす">-->
   </div>
-  <div id="result">
-    <canvas id="cvs"></canvas>
-    <input id="dl" type="button" value="ダウンロード">
-    <a href="" id="dllink" download="sozai.png"></a>
+  <div id="result" style="display:none;">
     <input id="restart" type="button" value="もっと削る">
+    <input id="reframe" type="button" value="枠を太くする">
+    <div id="cvsbg" style="z-index:1;background-color:black;margin:0;padding:0;">
+      <canvas id="cvs" style="z-index:10;"></canvas>
+    </div>
+    <br>
+    <input id="dl" type="button" value="ダウンロード">
+    <a href="" id="dllink" download="seal.png"></a>
   </div>
   <div id="lock" style="z-index:999;position:absolute;top:0px;left:0px;right:0px;bottom:0px;background-color:pink;opacity:0.3;text-align:center;font-size:xx-large;color:gray;">読み込み中...</div>
   <script>
     $(function(){
 
+      $("#dummy").hide();
       $("#result").hide();
       unlock();
 
@@ -35,13 +44,15 @@
         $("#lock").hide();
       }
 
-      $("#start").on("click", function(){
+      $("#start,#addFrame").on("click", function(){
 
         lock();
         $("#result").hide();
+        $("#reframe").hide();
+        $("#restart").hide();
 
         if ($("#file").val() === "") {
-          alert("ファイル選んでね");
+          alert("pngの素材を読み込んでね");
           unlock();
           return;
         }
@@ -53,6 +64,8 @@
         var image = new Image();
         var fr = new FileReader();
 
+        var id = $(this).attr("id");
+
         fr.onload = function(evt) {
           image.onload = function() {
             var height = image.naturalHeight;
@@ -61,10 +74,13 @@
             canvas.attr('height', height);
             ctx.drawImage(image, 0, 0, width, height);
 
-            trimImage(ctx);
-            // 処理おわり
-            $("#result").show();
-            unlock();
+            if (id === "start"){
+              trimImage(ctx, false);
+              $("#restart").show();
+            }else{
+              addFrame(ctx);
+              $("#reframe").show();
+            }
           }
           image.src = evt.target.result;
         }
@@ -77,9 +93,15 @@
         $("#result").hide();
         var canvas = $("#cvs");
         var ctx = canvas[0].getContext('2d');
-        trimImage(ctx);
-        $("#result").show();
-        unlock();
+        trimImage(ctx, false);
+      });
+
+      $("#reframe").on("click", function(){
+        lock();
+        $("#result").hide();
+        var canvas = $("#cvs");
+        var ctx = canvas[0].getContext('2d');
+        addFrame(ctx);
       });
 
       $("#dl").on("click", function(){
@@ -93,7 +115,12 @@
         }
       });
 
-      function trimImage(ctx){
+      function finish(){
+        $("#result").show();
+        unlock();
+      }
+
+      function trimImage(ctx, al){
         var width = ctx.canvas.width;
         var height = ctx.canvas.height;
         var imagedata = ctx.getImageData(0, 0, width, height);
@@ -141,19 +168,114 @@
         }
 
         // 消しゴム
-        for (var y = 0; y < height; y++){
-          for (var x = 0; x < width; x++){
-            if (aflgs[y * width + x] === false && delflgs[y * width + x] === true){
-              imagedata.data[(y * width + x) * 4 + 0] = 0;
-              imagedata.data[(y * width + x) * 4 + 1] = 0;
-              imagedata.data[(y * width + x) * 4 + 2] = 0;
-              imagedata.data[(y * width + x) * 4 + 3] = 0;
+        if (al){
+          for (var y = 0; y < height; y++){
+            for (var x = 0; x < width; x++){
+              if (aflgs[y * width + x] === false && delflgs[y * width + x] === true){
+                imagedata.data[(y * width + x) * 4 + 3] = 128;
+              }
+            }
+          }
+        }else{
+          for (var y = 0; y < height; y++){
+            for (var x = 0; x < width; x++){
+              if (aflgs[y * width + x] === false && delflgs[y * width + x] === true){
+                imagedata.data[(y * width + x) * 4 + 0] = 0;
+                imagedata.data[(y * width + x) * 4 + 1] = 0;
+                imagedata.data[(y * width + x) * 4 + 2] = 0;
+                imagedata.data[(y * width + x) * 4 + 3] = 0;
+              }
             }
           }
         }
-        ctx.clearRect(0, 0, width, height);
 
         ctx.putImageData(imagedata, 0, 0);
+
+        if (!al){
+          trimImage(ctx, true);
+        }
+
+        $("#cvsbg").width(width);
+        $("#cvsbg").height(height);
+        finish();
+      }
+
+      function addFrame(ctx){
+        var width = ctx.canvas.width;
+        var height = ctx.canvas.height;
+        var imagedata = ctx.getImageData(0, 0, width, height);
+        var aflgs = [];
+        // 透明度チェック
+        for (var i = 0; i < width * height; i++) {
+          if (imagedata.data[i*4+3] === 0){
+            aflgs.push(true);
+          }else{
+            aflgs.push(false);
+          }
+        }
+
+        // 塗る場所チェック
+        var frflgs = new Array(aflgs.length).fill(false);
+        for (var y = 0; y < height; y++){
+          for (var x = 0; x < width; x++){
+            if (aflgs[y * width + x] === false){
+              if (y !== 0){
+                frflgs[(y - 1) * width + x] = true;
+              }
+              if (x !== 0){
+                frflgs[y * width + (x - 1)] = true;
+              }
+              if (y !== (height - 1)){
+                frflgs[(y + 1) * width + x] = true;
+              }
+              if (x !== (width - 1)){
+                frflgs[y * width + (x + 1)] = true;
+              }
+/*              if (y !== 0 && x !== 0){
+                frflgs[(y - 1) * width + (x - 1)] = true;
+              }
+              if (y !== (height - 1) && x !== 0){
+                frflgs[(y + 1) * width + (x - 1)] = true;
+              }
+              if (y !== 0 && x !== (width - 1)){
+                frflgs[(y - 1) * width + (x + 1)] = true;
+              }
+              if (y !== (height - 1) && x !== (width - 1)){
+                frflgs[(y + 1) * width + (x + 1)] = true;
+              }*/
+            }
+          }
+        }
+
+        // 透明なところを白塗り
+        whitedata = ctx.createImageData(imagedata);
+        for (var y = 0; y < height; y++){
+          for (var x = 0; x < width; x++){
+            if (frflgs[y * width + x] === true){
+              whitedata.data[(y * width + x) * 4 + 0] = 255;
+              whitedata.data[(y * width + x) * 4 + 1] = 255;
+              whitedata.data[(y * width + x) * 4 + 2] = 255;
+              whitedata.data[(y * width + x) * 4 + 3] = 255;
+            }
+
+          }
+        }
+
+        var dmycvs = $("<canvas>");
+        var dmyctx = dmycvs[0].getContext('2d');
+        dmycvs.attr('width', width);
+        dmycvs.attr('height', height);
+        dmyctx.putImageData(imagedata, 0, 0);
+        var image = new Image();
+        image.src= dmycvs[0].toDataURL();
+        image.onload = function() {
+          ctx.putImageData(whitedata, 0, 0);
+          ctx.drawImage(image, 0, 0, width, height);
+
+          $("#cvsbg").width(width);
+          $("#cvsbg").height(height);
+          finish();
+        }
       }
     });
   </script>
